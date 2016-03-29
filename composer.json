@@ -1,0 +1,19 @@
+{
+    "name": "cboden/binky",
+    "description": "An easy command line utility for spying on RabbitMQ exchanges",
+    "keywoards": ["RabbitMQ", "CLI", "consumer", "exchange"],
+    "license": "MIT",
+    "authors": [{
+        "name": "Chris Boden",
+        "email": "cboden@gmail.com",
+        "role": "Developer"
+    }],
+    "require": {
+        "php": ">=7.0",
+        "bunny/bunny": "^0.2.2",
+        "symfony/console": "^3.0"
+    },
+    "bin": [
+        "bin/binky"
+    ]
+}
