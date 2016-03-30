@@ -61,9 +61,41 @@ use Symfony\Component\Console\Output\OutputInterface;
                 list($ch, $qr) = $r;
 
                 return Promise\all(array_merge([$ch, $qr], array_map(function($exKey) use ($ch, $qr) {
-                    list($exchange, $routingKey) = explode(':', "{$exKey}:#");
+                    $routingKey = '';
+                    $bindings   = explode(':', $exKey);
+                    $exchange   = array_shift($bindings);
+                    $headers    = [];
 
-                    return $ch->queueBind($qr->queue, $exchange, $routingKey);
+                    switch (count($bindings)) {
+                        case 0: // assuming topic or fanout exchange
+                            $routingKey = '#';
+                            break;
+                        case 1: // assuming topic exchange
+                            $routingKey = $bindings[0];
+                            break;
+                        default: // Assuming header exchange
+                            $parser = function($delimiter, $match) use ($exKey, $exchange) {
+                                return array_reduce(explode($delimiter, substr($exKey, strlen($exchange) + 1)), function($acc, $string) {
+                                    list($key, $val) = explode(':', $string);
+                                    $acc[$key] = $val;
+
+                                    return $acc;
+                                }, ['x-match' => $match]);
+                            };
+
+                            if (strstr($exKey, '&')) {
+                                $headers = $parser('&', 'all');
+                            } else if (strstr($exKey, '|')) {
+                                $headers = $parser('|', 'any');
+                            } else {
+                                list($key, $val) = $bindings;
+                                $headers[$key] = $val;
+                            }
+
+                            break;
+                    };
+
+                    return $ch->queueBind($qr->queue, $exchange, $routingKey, false, $headers);
                 }, $input->getOption('bind'))));
             })->then(function($r) use ($input, $output) {
                 return $r[0]->consume(function(Message $msg, Channel $ch, Client $c) use ($output) {
