@@ -8,8 +8,13 @@
         "email": "cboden@gmail.com",
         "role": "Developer"
     }],
+    "autoload": {
+        "psr-4": {
+            "Binky\\": "src"
+        }
+    },
     "require": {
-        "php": ">=7.0",
+        "php": ">=5.4.2",
         "bunny/bunny": "^0.2.2",
         "symfony/console": "^3.0",
         "react/stream": "^0.4.3"
