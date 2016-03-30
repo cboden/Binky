@@ -31,7 +31,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 
         protected function configure() {
             $this->setName('binky')
-                ->setDescription('Spy on RabbitMQ exchanges')
+                ->setDescription('Introspect RabbitMQ exchanges')
                 ->addOption('bind', 'b', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'an exchange:key to bind to', ['amq.rabbitmq.log:#'])
                 ->addOption('host', 'rh', InputOption::VALUE_OPTIONAL, 'host to connect to', '127.0.0.1')
                 ->addOption('port', 'o', InputOption::VALUE_OPTIONAL, 'Port to bind to', '5672')
