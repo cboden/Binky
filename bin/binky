@@ -73,7 +73,7 @@ use Symfony\Component\Console\Output\OutputInterface;
                     } else {
                         $output->writeln("{$msg->exchange}:{$msg->routingKey} > {$msg->content}");
                     }
-                });
+                }, $r[1]->queue, '', false, true, true);
             });
 
             $c->run();
