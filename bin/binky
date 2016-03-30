@@ -3,6 +3,7 @@
 use Bunny\Async\Client;
 use Bunny\{Channel,Message};
 use React\Promise;
+use React\Stream\Stream;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\{InputInterface,InputOption};
@@ -38,17 +39,35 @@ use Symfony\Component\Console\Output\OutputInterface;
                 ->addOption('user', 'u', InputOption::VALUE_OPTIONAL, 'username to connect to as', 'guest')
                 ->addOption('pass', 'p', InputOption::VALUE_OPTIONAL, 'password to connect to for given user', 'guest')
                 ->addOption('vhost', 'vh', InputOption::VALUE_OPTIONAL, 'virtual host to create channel on', '/')
+                ->addOption('pipe', 'w', InputOption::VALUE_OPTIONAL, 'pipe input to an exchange:key', null)
             ;
         }
 
         protected function execute(InputInterface $input, OutputInterface $output) {
-            $c = new Client(null, [
+            $loop = \React\EventLoop\Factory::create();
+
+            $c = new Client($loop, [
                 'host'  => $input->getOption('host'),
                 'port'  => (int)$input->getOption('port'),
                 'user'  => $input->getOption('user'),
                 'pass'  => $input->getOption('pass'),
                 'vhost' => $input->getOption('vhost'),
             ]);
+
+            if (null !== ($destination = $input->getOption('pipe'))) {
+                $c->connect()->then(function(Client $c) {
+                    return $c->channel();
+                })->then(function(Channel $ch) use ($loop, $destination) {
+                    $stdin = new Stream(fopen('php://stdin', 'r+'), $loop);
+                    list($exchange, $routingKey) = explode(':', "{$destination}:#");
+
+                    $stdin->on('data', function($data) use ($ch, $exchange, $routingKey) {
+                        $ch->publish($data, [], $exchange, $routingKey);
+                    });
+                });
+
+                return $c->run();
+            }
 
             $c->connect()->then(function(Client $c) {
                 return $c->channel();
