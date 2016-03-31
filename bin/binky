@@ -38,6 +38,7 @@ use Symfony\Component\Console\Output\OutputInterface;
                 ->addOption('user', 'u', InputOption::VALUE_OPTIONAL, 'username to connect to as', 'guest')
                 ->addOption('pass', 'p', InputOption::VALUE_OPTIONAL, 'password to connect to for given user', 'guest')
                 ->addOption('vhost', 'vh', InputOption::VALUE_OPTIONAL, 'virtual host to create channel on', '/')
+                ->addOption('format', 'f', InputOption::VALUE_NONE, 'format output all pretty like')
             ;
         }
 
@@ -66,12 +67,24 @@ use Symfony\Component\Console\Output\OutputInterface;
                     return $ch->queueBind($qr->queue, $exchange, $routingKey);
                 }, $input->getOption('bind'))));
             })->then(function($r) use ($input, $output) {
-                return $r[0]->consume(function(Message $msg, Channel $ch, Client $c) use ($output) {
+                return $r[0]->consume(function(Message $msg, Channel $ch, Client $c) use ($input, $output) {
+                    $content = $msg->content;
+
+                    if ($input->getOption('format') && ('' !== ($contentType = strtolower($msg->getHeader('content-type', ''))))) {
+                        if ('application/json' === strtolower($contentType)) {
+                            if ("null" !== ($pretty = json_encode(json_decode($content, true), JSON_PRETTY_PRINT))) {
+                                $content = $pretty;
+                            } else {
+                                return $output->writeln("<bg=red>Expected JSON payload, received: {$content}</>");
+                            }
+                        }
+                    }
+
                     $cKey = "{$msg->exchange}:{$msg->routingKey}";
                     if (array_key_exists($cKey, $this->colourLookup)) {
-                        $output->writeln(sprintf("<{$this->colourLookup[$cKey]}>%s</>", $msg->content));
+                        $output->writeln(sprintf("<{$this->colourLookup[$cKey]}>%s</>", $content));
                     } else {
-                        $output->writeln("{$msg->exchange}:{$msg->routingKey} > {$msg->content}");
+                        $output->writeln("{$msg->exchange}:{$msg->routingKey} > {$content}");
                     }
                 }, $r[1]->queue, '', false, true, true);
             });
