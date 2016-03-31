@@ -4,6 +4,7 @@ use Bunny\Async\Client;
 use Bunny\Channel;
 use Bunny\Message;
 use React\Promise;
+use \React\EventLoop\Factory;
 use React\Stream\Stream;
 use Symfony\Component\Console\Command\Command as SymfonyCommand;
 use Symfony\Component\Console\Input\InputInterface;
@@ -32,7 +33,7 @@ class Command extends SymfonyCommand {
     }
 
     protected function execute(InputInterface $input, OutputInterface $output) {
-        $loop = \React\EventLoop\Factory::create();
+        $loop = Factory::create();
 
         $c = new Client($loop, [
             'host'  => $input->getOption('host'),
@@ -58,20 +59,20 @@ class Command extends SymfonyCommand {
         }
 
         if (null !== $input->getOption('bind')) {
-            $conn->then(function (Client $c) {
+            $conn->then(function(Client $c) {
                 return $c->channel();
-            })->then(function (Channel $ch) {
+            })->then(function(Channel $ch) {
                 return Promise\all([$ch, $ch->queueDeclare('', false, false, true, true)]);
-            })->then(function ($r) use ($input) {
+            })->then(function($r) use ($input) {
                 list($ch, $qr) = $r;
 
-                return Promise\all(array_merge([$ch, $qr], array_map(function ($exKey) use ($ch, $qr) {
+                return Promise\all(array_merge([$ch, $qr], array_map(function($exKey) use ($ch, $qr) {
                     $bindings = new Bindings($exKey);
 
                     return $ch->queueBind($qr->queue, $bindings->exchange, $bindings->routingKey, false, $bindings->headers);
                 }, $input->getOption('bind'))));
-            })->then(function ($r) use ($input, $output) {
-                return $r[0]->consume(function (Message $msg, Channel $ch, Client $c) use ($input, $output) {
+            })->then(function($r) use ($input, $output) {
+                return $r[0]->consume(function(Message $msg, Channel $ch, Client $c) use ($input, $output) {
                     $content = $msg->content;
 
                     if ($input->getOption('format') && ('' !== ($contentType = strtolower($msg->getHeader('content-type', ''))))) {
