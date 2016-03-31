@@ -61,41 +61,9 @@ use Symfony\Component\Console\Output\OutputInterface;
                 list($ch, $qr) = $r;
 
                 return Promise\all(array_merge([$ch, $qr], array_map(function($exKey) use ($ch, $qr) {
-                    $routingKey = '';
-                    $bindings   = explode(':', $exKey);
-                    $exchange   = array_shift($bindings);
-                    $headers    = [];
+                    $bindings = new Bindings($exKey);
 
-                    switch (count($bindings)) {
-                        case 0: // assuming topic or fanout exchange
-                            $routingKey = '#';
-                            break;
-                        case 1: // assuming topic exchange
-                            $routingKey = $bindings[0];
-                            break;
-                        default: // Assuming header exchange
-                            $parser = function($delimiter, $match) use ($exKey, $exchange) {
-                                return array_reduce(explode($delimiter, substr($exKey, strlen($exchange) + 1)), function($acc, $string) {
-                                    list($key, $val) = explode(':', $string);
-                                    $acc[$key] = $val;
-
-                                    return $acc;
-                                }, ['x-match' => $match]);
-                            };
-
-                            if (strstr($exKey, '&')) {
-                                $headers = $parser('&', 'all');
-                            } else if (strstr($exKey, '|')) {
-                                $headers = $parser('|', 'any');
-                            } else {
-                                list($key, $val) = $bindings;
-                                $headers[$key] = $val;
-                            }
-
-                            break;
-                    };
-
-                    return $ch->queueBind($qr->queue, $exchange, $routingKey, false, $headers);
+                    return $ch->queueBind($qr->queue, $bindings->exchange, $bindings->routingKey, false, $bindings->headers);
                 }, $input->getOption('bind'))));
             })->then(function($r) use ($input, $output) {
                 return $r[0]->consume(function(Message $msg, Channel $ch, Client $c) use ($output) {
@@ -111,6 +79,47 @@ use Symfony\Component\Console\Output\OutputInterface;
             $c->run();
         }
     };
+
+class Bindings {
+    public $exchange   = '';
+    public $routingKey = '';
+    public $headers    = [];
+
+    public function __construct($bindingString) {
+        $bindings = explode(':', $bindingString);
+        $this->exchange = array_shift($bindings);
+
+        switch (count($bindings)) {
+            case 0: // assuming topic or fanout exchange
+                $this->routingKey = '#';
+                break;
+            case 1: // assuming topic exchange
+                $this->routingKey = $bindings[0];
+                break;
+            default: // assuming header exchange
+                if (strstr($bindingString, '&')) {
+                    $this->headers = $this->parseHeader('&', 'all', $bindingString);
+                } else if (strstr($bindingString, '|')) {
+                    $this->headers = $this->parseHeader('|', 'any', $bindingString);
+                } else {
+                    list($key, $val) = $bindings;
+                    $this->headers[$key] = $val;
+                }
+
+                break;
+        }
+    }
+
+    private function parseHeader($delimiter, $match, $bindingString) {
+        return array_reduce(explode($delimiter, substr($bindingString, strlen($this->exchange) + 1)), function($acc, $string) {
+            list($key, $val) = explode(':', $string);
+            $acc[$key] = $val;
+
+            return $acc;
+        }, ['x-match' => $match]);
+
+    }
+}
 
     (new class($cmd) extends Application {
         private $cmd;
