@@ -4,6 +4,7 @@ use Bunny\Async\Client;
 use Bunny\Channel;
 use Bunny\Message;
 use React\Promise;
+use \React\EventLoop\Factory;
 use React\Stream\Stream;
 use Symfony\Component\Console\Command\Command as SymfonyCommand;
 use Symfony\Component\Console\Input\InputInterface;
@@ -32,7 +33,7 @@ class Command extends SymfonyCommand {
     }
 
     protected function execute(InputInterface $input, OutputInterface $output) {
-        $loop = \React\EventLoop\Factory::create();
+        $loop = Factory::create();
 
         $c = new Client($loop, [
             'host'  => $input->getOption('host'),
@@ -42,8 +43,10 @@ class Command extends SymfonyCommand {
             'vhost' => $input->getOption('vhost'),
         ]);
 
+        $conn = $c->connect();
+
         if (null !== ($destination = $input->getOption('pipe'))) {
-            $c->connect()->then(function(Client $c) {
+            $conn->then(function(Client $c) {
                 return $c->channel();
             })->then(function(Channel $ch) use ($loop, $destination) {
                 $stdin = new Stream(fopen('php://stdin', 'r+'), $loop);
@@ -53,47 +56,44 @@ class Command extends SymfonyCommand {
                     $ch->publish($data, [], $bindings->exchange, $bindings->routingKey);
                 });
             });
-
-            return $c->run();
         }
 
-        $c->connect()->then(function(Client $c) {
-            return $c->channel();
-        })->then(function (Channel $ch) {
-            return Promise\all([
-                $ch,
-                $ch->queueDeclare('', false, false, true, true)
-            ]);
-        })->then(function($r) use ($input) {
-            list($ch, $qr) = $r;
+        if (null !== $input->getOption('bind')) {
+            $conn->then(function(Client $c) {
+                return $c->channel();
+            })->then(function(Channel $ch) {
+                return Promise\all([$ch, $ch->queueDeclare('', false, false, true, true)]);
+            })->then(function($r) use ($input) {
+                list($ch, $qr) = $r;
 
-            return Promise\all(array_merge([$ch, $qr], array_map(function($exKey) use ($ch, $qr) {
-                $bindings = new Bindings($exKey);
+                return Promise\all(array_merge([$ch, $qr], array_map(function($exKey) use ($ch, $qr) {
+                    $bindings = new Bindings($exKey);
 
-                return $ch->queueBind($qr->queue, $bindings->exchange, $bindings->routingKey, false, $bindings->headers);
-            }, $input->getOption('bind'))));
-        })->then(function($r) use ($input, $output) {
-            return $r[0]->consume(function(Message $msg, Channel $ch, Client $c) use ($input, $output) {
-                $content = $msg->content;
+                    return $ch->queueBind($qr->queue, $bindings->exchange, $bindings->routingKey, false, $bindings->headers);
+                }, $input->getOption('bind'))));
+            })->then(function($r) use ($input, $output) {
+                return $r[0]->consume(function(Message $msg, Channel $ch, Client $c) use ($input, $output) {
+                    $content = $msg->content;
 
-                if ($input->getOption('format') && ('' !== ($contentType = strtolower($msg->getHeader('content-type', ''))))) {
-                    if ('application/json' === strtolower($contentType)) {
-                        if ("null" !== ($pretty = json_encode(json_decode($content, true), JSON_PRETTY_PRINT))) {
-                            $content = $pretty;
-                        } else {
-                            return $output->writeln("<bg=red>Expected JSON payload, received: {$content}</>");
+                    if ($input->getOption('format') && ('' !== ($contentType = strtolower($msg->getHeader('content-type', ''))))) {
+                        if ('application/json' === strtolower($contentType)) {
+                            if ("null" !== ($pretty = json_encode(json_decode($content, true), JSON_PRETTY_PRINT))) {
+                                $content = $pretty;
+                            } else {
+                                return $output->writeln("<bg=red>Expected JSON payload, received: {$content}</>");
+                            }
                         }
                     }
-                }
 
-                $cKey = "{$msg->exchange}:{$msg->routingKey}";
-                if (array_key_exists($cKey, $this->colourLookup)) {
-                    $output->writeln(sprintf("<{$this->colourLookup[$cKey]}>%s</>", $content));
-                } else {
-                    $output->writeln("{$msg->exchange}:{$msg->routingKey} > {$content}");
-                }
-            }, $r[1]->queue, '', false, true, true);
-        });
+                    $cKey = "{$msg->exchange}:{$msg->routingKey}";
+                    if (array_key_exists($cKey, $this->colourLookup)) {
+                        $output->writeln(sprintf("<{$this->colourLookup[$cKey]}>%s</>", $content));
+                    } else {
+                        $output->writeln("{$cKey} > {$content}");
+                    }
+                }, $r[1]->queue, '', false, true, true);
+            });
+        }
 
         $c->run();
     }
