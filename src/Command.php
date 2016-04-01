@@ -85,11 +85,15 @@ class Command extends SymfonyCommand {
                         }
                     }
 
-                    $cKey = "{$msg->exchange}:{$msg->routingKey}";
-                    if (array_key_exists($cKey, $this->colourLookup)) {
-                        $output->writeln(sprintf("<{$this->colourLookup[$cKey]}>%s</>", $content));
+                    if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+                        $output->writeln(print_r($msg, true));
                     } else {
-                        $output->writeln("{$cKey} > {$content}");
+                        $cKey = "{$msg->exchange}:{$msg->routingKey}";
+                        if (array_key_exists($cKey, $this->colourLookup)) {
+                            $output->writeln(sprintf("<{$this->colourLookup[$cKey]}>%s</>", $content));
+                        } else {
+                            $output->writeln("{$cKey} > {$content}");
+                        }
                     }
                 }, $r[1]->queue, '', false, true, true);
             });
