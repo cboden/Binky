@@ -19,15 +19,15 @@ class Command extends SymfonyCommand {
 
     protected function configure() {
         $this->setName('binky')
-            ->setDescription('Introspect RabbitMQ exchanges')
-            ->addOption('bind', 'b', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'an exchange:key to bind to', ['amq.rabbitmq.log:#'])
-            ->addOption('host', 'H', InputOption::VALUE_OPTIONAL, 'host to connect to', '127.0.0.1')
-            ->addOption('port', 'P', InputOption::VALUE_OPTIONAL, 'Port to bind to', '5672')
-            ->addOption('user', 'u', InputOption::VALUE_OPTIONAL, 'username to connect to as', 'guest')
-            ->addOption('pass', 'p', InputOption::VALUE_OPTIONAL, 'password to connect to for given user', 'guest')
-            ->addOption('vhost', 'vh', InputOption::VALUE_OPTIONAL, 'virtual host to create channel on', '/')
-            ->addOption('format', 'f', InputOption::VALUE_NONE, 'format output all pretty like')
-            ->addOption('pipe', 'w', InputOption::VALUE_OPTIONAL, 'pipe input to an exchange:key', null)
+            ->setDescription('Publish or consume RabbitMQ exchanges through stdin and stdout')
+            ->addOption('bind', 'b', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'An exchange:key or exchange:header:val to bind to for consuming messages', ['amq.rabbitmq.log:#'])
+            ->addOption('pipe', 'w', InputOption::VALUE_OPTIONAL, 'Pipe streamed input to an exchange:key', null)
+            ->addOption('host', 'H', InputOption::VALUE_OPTIONAL, 'Connect to HOST', '127.0.0.1')
+            ->addOption('port', 'P', InputOption::VALUE_OPTIONAL, 'Connect to PORT', '5672')
+            ->addOption('user', 'u', InputOption::VALUE_OPTIONAL, 'Connect using USERNAME', 'guest')
+            ->addOption('pass', 'p', InputOption::VALUE_OPTIONAL, 'Connect using password PASSWORD', 'guest')
+            ->addOption('vhost', 'V', InputOption::VALUE_OPTIONAL, 'Connect to vhost VHOST', '/')
+            ->addOption('format', 'f', InputOption::VALUE_NONE, 'Format output all pretty like')
         ;
     }
 

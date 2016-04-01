@@ -1,6 +1,6 @@
 # Binky
 
-Binky is a command line application to introspect RabbitMQ exchanges and output the messages to STDOUT
+Binky is a command line application to publish or consume RabbitMQ exchanges through stdin and stdout
 
 ### Installation
 
