@@ -18,10 +18,12 @@ class Command extends SymfonyCommand {
         'amq.rabbitmq.log:info' => 'fg=green'
     ];
 
+    private $defaultBinding = ['amq.rabbitmq.log:#'];
+
     protected function configure() {
         $this->setName('binky')
             ->setDescription('Publish or consume RabbitMQ exchanges through stdin and stdout')
-            ->addOption('bind', 'b', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'An exchange:key or exchange:header:val to bind to for consuming messages', ['amq.rabbitmq.log:#'])
+            ->addOption('bind', 'b', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'An exchange:key or exchange:header:val to bind to for consuming messages', $this->defaultBinding)
             ->addOption('pipe', 'w', InputOption::VALUE_OPTIONAL, 'Pipe streamed input to an exchange:key', null)
             ->addOption('host', 'H', InputOption::VALUE_OPTIONAL, 'Connect to HOST', '127.0.0.1')
             ->addOption('port', 'P', InputOption::VALUE_OPTIONAL, 'Connect to PORT', '5672')
@@ -56,9 +58,13 @@ class Command extends SymfonyCommand {
                     $ch->publish($data, [], $bindings->exchange, $bindings->routingKey);
                 });
             });
+
+            if ($this->defaultBinding === $input->getOption('bind')) {
+                $input->setOption('bind', []);
+            }
         }
 
-        if (null !== $input->getOption('bind')) {
+        if ([] !== $input->getOption('bind')) {
             $conn->then(function(Client $c) {
                 return $c->channel();
             })->then(function(Channel $ch) {
