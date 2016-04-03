@@ -11,6 +11,7 @@ Binky is a command line application to publish or consume RabbitMQ exchanges thr
     binky --help
 
 Consume all messages from a topic or fanout exchange:
+
     binky -b amq.topic
 
 Consume all errors and warnings from RabbitMQ's log exchange via routing keys error+warning:
