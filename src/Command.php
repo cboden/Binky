@@ -51,6 +51,10 @@ class Command extends SymfonyCommand {
 
         $conn = $c->connect();
 
+        $conn->then(function() use ($output) {
+            $output->writeln('<bg=green>Connected...</>');
+        });
+
         if (null !== ($destination = $input->getOption('pipe'))) {
             $conn->then(function(Client $c) {
                 return $c->channel();
@@ -109,6 +113,10 @@ class Command extends SymfonyCommand {
             }, $nope);
         }
 
-        $c->run();
+        try {
+            $c->run();
+        } catch (\Exception $e) {
+            $nope($e);
+        }
     }
 }
