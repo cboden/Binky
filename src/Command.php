@@ -31,6 +31,8 @@ class Command extends SymfonyCommand {
             ->addOption('pass', 'p', InputOption::VALUE_OPTIONAL, 'Connect using password PASSWORD', 'guest')
             ->addOption('vhost', 'V', InputOption::VALUE_OPTIONAL, 'Connect to vhost VHOST', '/')
             ->addOption('format', 'f', InputOption::VALUE_NONE, 'Format output all pretty like')
+            ->addOption('delimiter', 'd', InputOption::VALUE_OPTIONAL, 'Delimiter to split messages apart (used with --pipe)', "\n")
+            ->addOption('once', 'o', InputOption::VALUE_NONE, 'Run the script for one event and then exit (used with --pipe)')
         ;
     }
 
@@ -58,12 +60,26 @@ class Command extends SymfonyCommand {
         if (null !== ($destination = $input->getOption('pipe'))) {
             $conn->then(function(Client $c) {
                 return $c->channel();
-            })->then(function(Channel $ch) use ($loop, $destination) {
+            })->then(function(Channel $ch) use ($loop, $destination, $input) {
                 $stdin = new Stream(fopen('php://stdin', 'r+'), $loop);
                 $bindings = new Bindings($destination);
 
-                $stdin->on('data', function($data) use ($ch, $bindings) {
-                    $ch->publish($data, [], $bindings->exchange, $bindings->routingKey);
+                $dataParser = function($data) use ($input) {
+                    return '' !== $input->getOption('delimiter') ? explode($input->getOption('delimiter'), trim($data)) : [trim($data)];
+                };
+
+                $once = $input->getOption('once') ? function() use ($ch) {
+                    $ch->close()->then(function() use ($ch) {
+                        $ch->getClient()->disconnect();
+                    });
+                } : function() {};
+
+                $stdin->on('data', function($data) use ($ch, $bindings, $dataParser, $once) {
+                    Promise\all(array_map(function($message) use ($ch, $bindings) {
+                        return $ch->publish($message, [], $bindings->exchange, $bindings->routingKey);
+                    }, array_filter($dataParser($data), function($message) {
+                        return '' !== $message;
+                    })))->then($once);
                 });
             }, $nope);
 
