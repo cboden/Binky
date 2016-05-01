@@ -37,6 +37,10 @@ class Command extends SymfonyCommand {
     protected function execute(InputInterface $input, OutputInterface $output) {
         $loop = Factory::create();
 
+        $nope = function(\Exception $e) use ($output) {
+            $output->writeln("<bg=red>{$e->getMessage()}</>");
+        };
+
         $c = new Client($loop, [
             'host'  => $input->getOption('host'),
             'port'  => (int)$input->getOption('port'),
@@ -46,6 +50,10 @@ class Command extends SymfonyCommand {
         ]);
 
         $conn = $c->connect();
+
+        $conn->then(function() use ($output) {
+            $output->writeln('<bg=green>Connected...</>');
+        });
 
         if (null !== ($destination = $input->getOption('pipe'))) {
             $conn->then(function(Client $c) {
@@ -57,7 +65,7 @@ class Command extends SymfonyCommand {
                 $stdin->on('data', function($data) use ($ch, $bindings) {
                     $ch->publish($data, [], $bindings->exchange, $bindings->routingKey);
                 });
-            });
+            }, $nope);
 
             if ($this->defaultBinding === $input->getOption('bind')) {
                 $input->setOption('bind', []);
@@ -102,9 +110,13 @@ class Command extends SymfonyCommand {
                         }
                     }
                 }, $r[1]->queue, '', false, true, true);
-            });
+            }, $nope);
         }
 
-        $c->run();
+        try {
+            $c->run();
+        } catch (\Exception $e) {
+            $nope($e);
+        }
     }
 }
