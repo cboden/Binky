@@ -32,7 +32,11 @@ Consume all messages on a header exchange where any key/val properties can match
 
 Publish to an exchange with routing key when ever a file is appended to:
 
-    tail -f -n 0 /var/log/nginx/error.log | binky -w amq.topic:errors.nginx
+    tail -0f /var/log/nginx/error.log | binky -w amq.topic:errors.nginx
+
+Publish the entire contents of a file to an exchange and disconnect (with messages delimited by new lines):
+
+    cat myScaffoldingFile | binky -w amq.topic:myKey -o
 
 ### Whoops
 
