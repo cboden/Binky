@@ -22,7 +22,7 @@ class Command extends SymfonyCommand {
 
     protected function configure() {
         $this->setName('binky')
-            ->setDescription('Publish or consume RabbitMQ exchanges through stdin and stdout')
+            ->setDescription('Publish or consume RabbitMQ through stdin and stdout')
             ->addOption('bind', 'b', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'An exchange:key or exchange:header:val to bind to for consuming messages', $this->defaultBinding)
             ->addOption('consume', 'c', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'Consume an existing queue (without creating any temporary bindings)', [])
             ->addOption('pipe', 'w', InputOption::VALUE_OPTIONAL, 'Pipe streamed input to an exchange:key', null)
