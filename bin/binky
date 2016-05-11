@@ -1,12 +1,7 @@
 #!/usr/bin/env php
 <?php
-use Bunny\Async\Client;
-use Bunny\{Channel,Message};
-use React\Promise;
-use Symfony\Component\Console\Application;
-use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Input\{InputInterface,InputOption};
-use Symfony\Component\Console\Output\OutputInterface;
+use Binky\Application;
+use Binky\Command;
 
     $files = [
         __DIR__ . '/../vendor/autoload.php',
@@ -22,89 +17,4 @@ use Symfony\Component\Console\Output\OutputInterface;
         }
     }
 
-    $cmd = new class extends Command {
-        private $colourLookup = [
-            'amq.rabbitmq.log:error' => 'fg=red',
-            'amq.rabbitmq.log:warning' => 'fg=yellow',
-            'amq.rabbitmq.log:info' => 'fg=green'
-        ];
-
-        protected function configure() {
-            $this->setName('binky')
-                ->setDescription('Introspect RabbitMQ exchanges')
-                ->addOption('bind', 'b', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'an exchange:key to bind to', ['amq.rabbitmq.log:#'])
-                ->addOption('host', 'rh', InputOption::VALUE_OPTIONAL, 'host to connect to', '127.0.0.1')
-                ->addOption('port', 'o', InputOption::VALUE_OPTIONAL, 'Port to bind to', '5672')
-                ->addOption('user', 'u', InputOption::VALUE_OPTIONAL, 'username to connect to as', 'guest')
-                ->addOption('pass', 'p', InputOption::VALUE_OPTIONAL, 'password to connect to for given user', 'guest')
-                ->addOption('vhost', 'vh', InputOption::VALUE_OPTIONAL, 'virtual host to create channel on', '/')
-            ;
-        }
-
-        protected function execute(InputInterface $input, OutputInterface $output) {
-            $c = new Client(null, [
-                'host'  => $input->getOption('host'),
-                'port'  => (int)$input->getOption('port'),
-                'user'  => $input->getOption('user'),
-                'pass'  => $input->getOption('pass'),
-                'vhost' => $input->getOption('vhost'),
-            ]);
-
-            $c->connect()->then(function(Client $c) {
-                return $c->channel();
-            })->then(function (Channel $ch) {
-                return Promise\all([
-                    $ch,
-                    $ch->queueDeclare('', false, false, true, true)
-                ]);
-            })->then(function($r) use ($input) {
-                list($ch, $qr) = $r;
-
-                return Promise\all(array_merge([$ch, $qr], array_map(function($exKey) use ($ch, $qr) {
-                    list($exchange, $routingKey) = explode(':', "{$exKey}:#");
-
-                    return $ch->queueBind($qr->queue, $exchange, $routingKey);
-                }, $input->getOption('bind'))));
-            })->then(function($r) use ($input, $output) {
-                return $r[0]->consume(function(Message $msg, Channel $ch, Client $c) use ($output) {
-                    $cKey = "{$msg->exchange}:{$msg->routingKey}";
-                    if (array_key_exists($cKey, $this->colourLookup)) {
-                        $output->writeln(sprintf("<{$this->colourLookup[$cKey]}>%s</>", $msg->content));
-                    } else {
-                        $output->writeln("{$msg->exchange}:{$msg->routingKey} > {$msg->content}");
-                    }
-                }, $r[1]->queue, '', false, true, true);
-            });
-
-            $c->run();
-        }
-    };
-
-    (new class($cmd) extends Application {
-        private $cmd;
-
-        public function __construct(Command $cmd) {
-            $this->cmd = $cmd;
-
-            parent::__construct('Binky', 'v0.1');
-        }
-
-        protected function getCommandName(InputInterface $input) {
-            return $this->cmd->getName();
-        }
-
-        protected function getDefaultCommands() {
-            $defaults = parent::getDefaultCommands();
-
-            $defaults[] = $this->cmd;
-
-            return $defaults;
-        }
-
-        public function getDefinition() {
-            $inputDefinition = parent::getDefinition();
-            $inputDefinition->setArguments();
-
-            return $inputDefinition;
-        }
-    })->run();
+    (new Application(new Command))->run();
