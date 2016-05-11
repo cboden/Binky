@@ -30,6 +30,10 @@ Consume all messages on a header exchange where any key/val properties can match
 
     binky -b "amq.headers:header1:value1|header2:value2"
 
+Consume all messages from an existing queue (does not re-queue):
+
+    binky -c "my-queue" -c "another-queue"
+
 Publish to an exchange with routing key when ever a file is appended to:
 
     tail -0f /var/log/nginx/error.log | binky -w amq.topic:errors.nginx

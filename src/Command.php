@@ -22,8 +22,9 @@ class Command extends SymfonyCommand {
 
     protected function configure() {
         $this->setName('binky')
-            ->setDescription('Publish or consume RabbitMQ exchanges through stdin and stdout')
+            ->setDescription('Publish or consume RabbitMQ through stdin and stdout')
             ->addOption('bind', 'b', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'An exchange:key or exchange:header:val to bind to for consuming messages', $this->defaultBinding)
+            ->addOption('consume', 'c', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'Consume an existing queue (without creating any temporary bindings)', [])
             ->addOption('pipe', 'w', InputOption::VALUE_OPTIONAL, 'Pipe streamed input to an exchange:key', null)
             ->addOption('host', 'H', InputOption::VALUE_OPTIONAL, 'Connect to HOST', '127.0.0.1')
             ->addOption('port', 'P', InputOption::VALUE_OPTIONAL, 'Connect to PORT', '5672')
@@ -88,6 +89,24 @@ class Command extends SymfonyCommand {
             }
         }
 
+        $consume = function(Message $msg) use ($input, $output) {
+            $this->consume($msg, $input, $output);
+        };
+
+        if ([] !== $input->getOption('consume')) {
+            $conn->then(function(Client $c) {
+                return $c->channel();
+            })->then(function(Channel $ch) use ($input, $consume) {
+                return Promise\all(array_map(function($queue) use ($ch, $consume) {
+                    return $ch->consume($consume, $queue, '', false, true, true);
+                }, $input->getOption('consume')));
+            }, $nope);
+
+            if ($this->defaultBinding === $input->getOption('bind')) {
+                $input->setOption('bind', []);
+            }
+        }
+
         if ([] !== $input->getOption('bind')) {
             $conn->then(function(Client $c) {
                 return $c->channel();
@@ -101,31 +120,8 @@ class Command extends SymfonyCommand {
 
                     return $ch->queueBind($qr->queue, $bindings->exchange, $bindings->routingKey, false, $bindings->headers);
                 }, $input->getOption('bind'))));
-            })->then(function($r) use ($input, $output) {
-                return $r[0]->consume(function(Message $msg, Channel $ch, Client $c) use ($input, $output) {
-                    $content = $msg->content;
-
-                    if ($input->getOption('format') && ('' !== ($contentType = strtolower($msg->getHeader('content-type', ''))))) {
-                        if ('application/json' === strtolower($contentType)) {
-                            if ("null" !== ($pretty = json_encode(json_decode($content, true), JSON_PRETTY_PRINT))) {
-                                $content = $pretty;
-                            } else {
-                                return $output->writeln("<bg=red>Expected JSON payload, received: {$content}</>");
-                            }
-                        }
-                    }
-
-                    if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
-                        $output->writeln(print_r($msg, true));
-                    } else {
-                        $cKey = "{$msg->exchange}:{$msg->routingKey}";
-                        if (array_key_exists($cKey, $this->colourLookup)) {
-                            $output->writeln(sprintf("<{$this->colourLookup[$cKey]}>%s</>", $content));
-                        } else {
-                            $output->writeln("{$cKey} > {$content}");
-                        }
-                    }
-                }, $r[1]->queue, '', false, true, true);
+            })->then(function($r) use ($consume) {
+                return $r[0]->consume($consume, $r[1]->queue, '', false, true, true);
             }, $nope);
         }
 
@@ -133,6 +129,31 @@ class Command extends SymfonyCommand {
             $c->run();
         } catch (\Exception $e) {
             $nope($e);
+        }
+    }
+
+    private function consume(Message $msg, InputInterface $input, OutputInterface $output) {
+        $content = $msg->content;
+
+        if ($input->getOption('format') && ('' !== ($contentType = strtolower($msg->getHeader('content-type', ''))))) {
+            if ('application/json' === strtolower($contentType)) {
+                if ("null" !== ($pretty = json_encode(json_decode($content, true), JSON_PRETTY_PRINT))) {
+                    $content = $pretty;
+                } else {
+                    return $output->writeln("<bg=red>Expected JSON payload, received: {$content}</>");
+                }
+            }
+        }
+
+        if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+            $output->writeln(print_r($msg, true));
+        } else {
+            $cKey = "{$msg->exchange}:{$msg->routingKey}";
+            if (array_key_exists($cKey, $this->colourLookup)) {
+                $output->writeln(sprintf("<{$this->colourLookup[$cKey]}>%s</>", $content));
+            } else {
+                $output->writeln("{$cKey} > {$content}");
+            }
         }
     }
 }
