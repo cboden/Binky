@@ -66,7 +66,7 @@ class Command extends SymfonyCommand {
                 $bindings = new Bindings($destination);
 
                 $dataParser = function($data) use ($input) {
-                    return '' !== $input->getOption('delimiter') ? explode($input->getOption('delimiter'), trim($data)) : [trim($data)];
+                    return '' !== $input->getOption('delimiter') ? explode($input->getOption('delimiter'), $data) : [$data];
                 };
 
                 $once = $input->getOption('once') ? function() use ($ch) {
@@ -75,12 +75,25 @@ class Command extends SymfonyCommand {
                     });
                 } : function() {};
 
-                $stdin->on('data', function($data) use ($ch, $bindings, $dataParser, $once) {
+                $previousMessage = null;
+                $stdin->on('data', function($data) use ($ch, $bindings, $dataParser, &$previousMessage) {
+                    $parsedData = $dataParser($data);
+                    if($previousMessage) $parsedData[0] = $previousMessage . $parsedData[0];
+                    $previousMessage = array_pop($parsedData);
+
                     Promise\all(array_map(function($message) use ($ch, $bindings) {
-                        return $ch->publish($message, [], $bindings->exchange, $bindings->routingKey);
-                    }, array_filter($dataParser($data), function($message) {
-                        return '' !== $message;
-                    })))->then($once);
+                        return $ch->publish(trim($message), [], $bindings->exchange, $bindings->routingKey);
+                    }, array_filter($parsedData, function($message) {
+                        return '' !== trim($message);
+                    })));
+                });
+
+                $stdin->on('end', function() use ($ch, $bindings, $once, &$previousMessage) {
+                    if(trim($previousMessage)) {
+                        $ch->publish(trim($previousMessage), [], $bindings->exchange, $bindings->routingKey);
+                    }
+
+                    $once();
                 });
             }, $nope);
 
