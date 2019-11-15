@@ -17,7 +17,8 @@
         "php": ">=5.4.2",
         "bunny/bunny": "^0.2.2",
         "symfony/console": "^3.0",
-        "react/stream": "^0.4.3"
+        "react/stream": "^0.4.3",
+        "react/event-loop": "^0.4.0"
     },
     "bin": [
         "bin/binky"
