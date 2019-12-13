@@ -40,7 +40,7 @@ Publish to an exchange with routing key when ever a file is appended to:
 
 Publish the entire contents of a file to an exchange and disconnect (with messages delimited by new lines):
 
-    cat myScaffoldingFile | binky -w amq.topic:myKey -o
+    cat myScaffoldingFile | binky -w amq.topic:myKey
 
 ### Whoops
 

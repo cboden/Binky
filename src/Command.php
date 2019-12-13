@@ -33,7 +33,6 @@ class Command extends SymfonyCommand {
             ->addOption('vhost', 'V', InputOption::VALUE_OPTIONAL, 'Connect to vhost VHOST', '/')
             ->addOption('format', 'f', InputOption::VALUE_NONE, 'Format output all pretty like')
             ->addOption('delimiter', 'd', InputOption::VALUE_OPTIONAL, 'Delimiter to split messages apart (used with --pipe)', "\n")
-            ->addOption('once', 'o', InputOption::VALUE_NONE, 'Run the script for one event and then exit (used with --pipe)')
         ;
     }
 
@@ -69,16 +68,12 @@ class Command extends SymfonyCommand {
                     return '' !== $input->getOption('delimiter') ? explode($input->getOption('delimiter'), $data) : [$data];
                 };
 
-                $once = $input->getOption('once') ? function() use ($ch) {
-                    $ch->close()->then(function() use ($ch) {
-                        $ch->getClient()->disconnect();
-                    });
-                } : function() {};
-
                 $previousMessage = null;
                 $stdin->on('data', function($data) use ($ch, $bindings, $dataParser, &$previousMessage) {
                     $parsedData = $dataParser($data);
-                    if($previousMessage) $parsedData[0] = $previousMessage . $parsedData[0];
+                    if($previousMessage) {
+                        $parsedData[0] = $previousMessage . $parsedData[0];
+                    }
                     $previousMessage = array_pop($parsedData);
 
                     Promise\all(array_map(function($message) use ($ch, $bindings) {
@@ -88,12 +83,14 @@ class Command extends SymfonyCommand {
                     })));
                 });
 
-                $stdin->on('end', function() use ($ch, $bindings, $once, &$previousMessage) {
+                $stdin->on('end', function() use ($ch, $bindings, &$previousMessage) {
                     if(trim($previousMessage)) {
                         $ch->publish(trim($previousMessage), [], $bindings->exchange, $bindings->routingKey);
                     }
 
-                    $once();
+                    $ch->close()->then(function() use ($ch) {
+                        $ch->getClient()->disconnect();
+                    });
                 });
             }, $nope);
 
