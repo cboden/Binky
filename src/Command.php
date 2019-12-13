@@ -33,7 +33,6 @@ class Command extends SymfonyCommand {
             ->addOption('vhost', 'V', InputOption::VALUE_OPTIONAL, 'Connect to vhost VHOST', '/')
             ->addOption('format', 'f', InputOption::VALUE_NONE, 'Format output all pretty like')
             ->addOption('delimiter', 'd', InputOption::VALUE_OPTIONAL, 'Delimiter to split messages apart (used with --pipe)', "\n")
-            ->addOption('once', 'o', InputOption::VALUE_NONE, 'Run the script for one event and then exit (used with --pipe)')
         ;
     }
 
@@ -66,21 +65,32 @@ class Command extends SymfonyCommand {
                 $bindings = new Bindings($destination);
 
                 $dataParser = function($data) use ($input) {
-                    return '' !== $input->getOption('delimiter') ? explode($input->getOption('delimiter'), trim($data)) : [trim($data)];
+                    return '' !== $input->getOption('delimiter') ? explode($input->getOption('delimiter'), $data) : [$data];
                 };
 
-                $once = $input->getOption('once') ? function() use ($ch) {
+                $previousMessage = null;
+                $stdin->on('data', function($data) use ($ch, $bindings, $dataParser, &$previousMessage) {
+                    $parsedData = $dataParser($data);
+                    if($previousMessage) {
+                        $parsedData[0] = $previousMessage . $parsedData[0];
+                    }
+                    $previousMessage = array_pop($parsedData);
+
+                    Promise\all(array_map(function($message) use ($ch, $bindings) {
+                        return $ch->publish(trim($message), [], $bindings->exchange, $bindings->routingKey);
+                    }, array_filter($parsedData, function($message) {
+                        return '' !== trim($message);
+                    })));
+                });
+
+                $stdin->on('end', function() use ($ch, $bindings, &$previousMessage) {
+                    if(trim($previousMessage)) {
+                        $ch->publish(trim($previousMessage), [], $bindings->exchange, $bindings->routingKey);
+                    }
+
                     $ch->close()->then(function() use ($ch) {
                         $ch->getClient()->disconnect();
                     });
-                } : function() {};
-
-                $stdin->on('data', function($data) use ($ch, $bindings, $dataParser, $once) {
-                    Promise\all(array_map(function($message) use ($ch, $bindings) {
-                        return $ch->publish($message, [], $bindings->exchange, $bindings->routingKey);
-                    }, array_filter($dataParser($data), function($message) {
-                        return '' !== $message;
-                    })))->then($once);
                 });
             }, $nope);
 
